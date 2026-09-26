@@ -1,38 +1,48 @@
+// MRPanalytics backend: read-only JSON API over the MRPscan MongoDB database.
+// The web app lives in ../frontend and talks to this API; nothing here serves HTML.
 const path = require('path');
-const os = require('os');
-const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const { getDb } = require('./db');
 const analytics = require('./analytics');
 
 const app = express();
-const PORT = Number(process.env.PORT) || 4100;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.PORT) || 4000;
+const HOST = process.env.HOST || '127.0.0.1';
 const ACCESS_KEY = (process.env.ANALYTICS_TOKEN || '').trim();
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const APP_NAME = (process.env.APP_NAME || 'MRPanalytics').trim();
-
-// index.html carries {{APP_NAME}} / {{APP_INITIAL}} placeholders filled from .env.
-const escHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-function sendIndex(req, res) {
-  const html = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8')
-    .replace(/\{\{APP_NAME\}\}/g, escHtml(APP_NAME))
-    .replace(/\{\{APP_INITIAL\}\}/g, escHtml(APP_NAME.charAt(0).toUpperCase() || 'M'));
-  res.set('Cache-Control', 'no-store').type('html').send(html);
-}
+const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 app.disable('x-powered-by');
-app.get(['/', '/index.html'], sendIndex);
-app.use(express.static(PUBLIC_DIR, { etag: false, maxAge: 0, index: false }));
+
+// CORS: only needed when the browser calls this API directly from another address
+// (frontend API_URL set). The default setup goes through the frontend's /api forwarder.
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && (CORS_ORIGINS.includes('*') || CORS_ORIGINS.includes(origin))) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Headers', 'x-access-key, content-type');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
+  next();
+});
 
 // Every request must send the access key (ANALYTICS_TOKEN) in the x-access-key header.
 // TRUST_LOCALHOST=true lets requests from this same computer skip it (handy on a laptop).
-// Keep it false on a server behind nginx: proxied visitors also arrive from 127.0.0.1.
+// A forwarding proxy (the frontend server, nginx) appends the real visitor to
+// x-forwarded-for; only its last hop is trusted, so a phone behind the proxy never counts
+// as local. Keep TRUST_LOCALHOST=false on servers.
 const TRUST_LOCALHOST = String(process.env.TRUST_LOCALHOST || 'false').trim().toLowerCase() === 'true';
-const isLocal = (req) => TRUST_LOCALHOST
-  && !req.get('x-forwarded-for') && !req.get('x-real-ip')
-  && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+function isLocal(req) {
+  if (!TRUST_LOCALHOST || !LOOPBACK.includes(req.socket.remoteAddress)) return false;
+  if (req.get('x-real-ip')) return LOOPBACK.includes(req.get('x-real-ip').trim());
+  const fwd = req.get('x-forwarded-for');
+  if (!fwd) return true;
+  const lastHop = fwd.split(',').pop().trim();
+  return LOOPBACK.includes(lastHop);
+}
 function requireKey(req, res, next) {
   if (!ACCESS_KEY || isLocal(req)) return next();
   const given = String(req.get('x-access-key') || '').trim().toUpperCase();
@@ -51,26 +61,18 @@ const wrap = (fn) => async (req, res) => {
   }
 };
 
+app.get('/', (req, res) => res.json({ service: 'mrpanalytics-backend', ok: true, api: '/api' }));
 app.get('/api/health', (req, res) => res.json({ ok: true, authRequired: Boolean(ACCESS_KEY) && !isLocal(req) }));
 app.use('/api', requireKey);
 app.get('/api/overview', wrap((db, req) => analytics.overview(db, Number(req.query.days) || 30)));
 app.get('/api/users', wrap((db, req) => analytics.listUsers(db, String(req.query.q || ''))));
 app.get('/api/users/:id', wrap((db, req) => analytics.userDetail(db, req.params.id, Number(req.query.days) || 30)));
-app.get('*', sendIndex);
-
-function lanUrls() {
-  const out = [];
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const a of list || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${PORT}`);
-  }
-  return out;
-}
+app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
 app.listen(PORT, HOST, () => {
-  console.log(`${APP_NAME} running at http://localhost:${PORT}`);
-  const lan = lanUrls();
-  if (lan.length) console.log(`Phone / LAN address: ${lan.join('  ')}`);
+  console.log(`MRPanalytics backend API on http://${HOST}:${PORT}/api`);
   console.log(ACCESS_KEY ? `Access key required (ANALYTICS_TOKEN)${TRUST_LOCALHOST ? ', except from this computer (TRUST_LOCALHOST=true)' : ' for every request'}.` : 'WARNING: ANALYTICS_TOKEN is empty, the API is open to anyone who can reach it.');
+  if (CORS_ORIGINS.length) console.log(`CORS allowed for: ${CORS_ORIGINS.join(', ')}`);
   getDb()
     .then((db) => console.log(`[db] connected to ${db.databaseName}`))
     .catch((err) => console.error('[db] connection failed:', err.message));

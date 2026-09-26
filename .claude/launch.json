@@ -2,9 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "analytics",
+      "name": "analytics-backend",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server/index.js"],
+      "runtimeArgs": ["backend/src/index.js"],
+      "port": 4000
+    },
+    {
+      "name": "analytics-frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["frontend/server.js"],
       "port": 4100
     }
   ]

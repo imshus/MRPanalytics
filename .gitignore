@@ -1,12 +1,22 @@
+# Dependencies
 node_modules/
+
+# Secrets: real settings files (each folder has a .env.example to copy)
 .env
+backend/.env
+frontend/.env
+
+# Build output
+frontend/dist/
 android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+*.apk
+
+# Android signing key (keep a private backup; needed for every app update)
 android/keystore.properties
 android/app/keystore/
 
-# Build outputs and files with real user data (repo is public)
-*.apk
+# Screenshots show real users' phone numbers and GST (repo is public)
 screenshots/

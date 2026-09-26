@@ -1,4 +1,4 @@
-// Thin wrapper: the analytics logic lives in analytics-core.js; the Node adapter feeds it BSON-free JSON.
+// Thin wrapper: the analytics logic lives in analytics-core.js; the Node adapter feeds it plain JSON.
 const { createAnalytics } = require('./analytics-core.js');
 const { nodeAdapter } = require('./mongo-adapter');
 

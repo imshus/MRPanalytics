@@ -1,17 +1,14 @@
 {
-  "name": "mrpscan-analytics",
+  "name": "mrpanalytics",
   "version": "1.0.0",
-  "description": "User analytics dashboard for the MRPscan MongoDB database",
-  "main": "server/index.js",
-  "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
-  },
-  "license": "UNLICENSED",
+  "description": "MRPanalytics: MRPscan user analytics. backend/ (API) + frontend/ (web app) + android/ (phone app)",
   "private": true,
-  "dependencies": {
-    "dotenv": "^16.6.1",
-    "express": "^4.22.3",
-    "mongodb": "^6.21.0"
+  "license": "UNLICENSED",
+  "scripts": {
+    "setup": "npm install --prefix backend",
+    "start": "node scripts/start-all.js",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm start --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend"
   }
 }

@@ -1,0 +1,17 @@
+{
+  "name": "mrpanalytics-backend",
+  "version": "1.0.0",
+  "description": "MRPanalytics backend: read-only JSON API over the MRPscan MongoDB database",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "mongodb": "^6.21.0"
+  }
+}

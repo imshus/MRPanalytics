@@ -47,7 +47,8 @@
   class AuthError extends Error {}
   async function api(path) {
     if (cache.has(path)) return cache.get(path);
-    const res = await fetch(path, { headers: { 'x-access-key': readKey() } });
+    const base = (window.MRP_CONFIG && window.MRP_CONFIG.apiUrl) || '';
+    const res = await fetch(base + path, { headers: { 'x-access-key': readKey() } });
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) throw new AuthError(body.error || 'Access key required');
     if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);

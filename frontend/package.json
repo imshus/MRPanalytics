@@ -1,0 +1,11 @@
+{
+  "name": "mrpanalytics-frontend",
+  "version": "1.0.0",
+  "description": "MRPanalytics web app (static) with a small server that forwards /api to the backend",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "start": "node server.js"
+  }
+}

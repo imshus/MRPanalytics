@@ -1,5 +1,5 @@
-/* MRPscan Analytics core – isomorphic. Runs in Node (server) and in the Android WebView
-   (through the MongoBridge). All database access goes through a tiny adapter:
+/* MRPanalytics backend core – all analytics queries.
+   Database access goes through a tiny adapter (see mongo-adapter.js):
      adapter.aggregate(collection, pipeline)            -> [docs]
      adapter.find(collection, filter, {sort, limit, projection}) -> [docs]
      adapter.findOne(collection, filter, {sort, projection})     -> doc | null
