@@ -7,8 +7,8 @@ logins, license, wallet, employees and all configured settings, with a timeline 
 The project has three separate parts, each with its own `.env`:
 
 ```
-backend/    API server (Node + Express + MongoDB). Holds the database password.
-frontend/   Web app (static HTML/JS/CSS) + small server that forwards /api to the backend.
+backend/    API server (Node + Express + MongoDB). Also serves the web app: ONE port for everything.
+frontend/   Web app source (static HTML/JS/CSS), built into frontend/dist. Optional dev server.
 android/    Phone app (WebView shell) that opens the frontend. Holds no secrets.
 ```
 
@@ -16,11 +16,12 @@ android/    Phone app (WebView shell) that opens the frontend. Holds no secrets.
 
 ```bash
 npm run setup      # installs backend dependencies (frontend has none)
-npm start          # starts backend (port 4000) and frontend (port 4100) together
+npm start          # starts the backend on ONE port (4100): web app at /, data at /api
 ```
 
-Open http://localhost:4100. The frontend prints the Wi-Fi address for phones.
-Each part can also run alone: `npm start --prefix backend`, `npm start --prefix frontend`.
+Open http://localhost:4100. The backend prints the Wi-Fi address for phones.
+The backend builds `frontend/dist` from `frontend/src` + `frontend/.env` every time it starts.
+Frontend development only: `npm run start:dev` also runs the frontend dev server on port 5173.
 
 Create each `.env` by copying the `.env.example` next to it.
 
@@ -29,11 +30,12 @@ Create each `.env` by copying the `.env.example` next to it.
 | Key | Purpose |
 |---|---|
 | `MONGO_URI`, `MONGO_DB` | Database connection. Never leaves the backend. |
-| `PORT` | API port, default 4000 |
-| `HOST` | `127.0.0.1` = only this machine can reach the API (default). `0.0.0.0` only if the frontend runs elsewhere. |
+| `PORT` | The one port for web app + API, default 4100 |
+| `HOST` | `0.0.0.0` = phones on the Wi-Fi can open it (default). On a server behind nginx use `127.0.0.1`. |
+| `SERVE_FRONTEND` | `true` (default) = also serve the web app on `PORT`. `false` = API only. |
 | `ANALYTICS_TOKEN` | Access key every browser and phone must enter. |
 | `TRUST_LOCALHOST` | `true` lets this computer skip the key. Keep `false` on a server behind nginx. |
-| `CORS_ORIGINS` | Web addresses allowed to call the API directly. Empty when using the /api forwarder. |
+| `CORS_ORIGINS` | Web addresses allowed to call the API from another site. Empty when the web app is served on the same port. |
 
 API: `GET /api/health`, `GET /api/overview?days=30`, `GET /api/users?q=<phone|name|business|gst>`,
 `GET /api/users/:idOrPhone?days=30`. Send the key in the `x-access-key` header. Read-only.
@@ -43,9 +45,9 @@ API: `GET /api/health`, `GET /api/overview?days=30`, `GET /api/users?q=<phone|na
 | Key | Purpose |
 |---|---|
 | `APP_NAME` | Name on the web page |
-| `FRONTEND_PORT` | Port the web app listens on, default 4100 |
-| `BACKEND_URL` | Where `/api` requests are forwarded, default `http://127.0.0.1:4000` |
-| `API_URL` | Leave empty (browser uses `/api` on the same address). Set only to call the backend directly, and add the site to the backend's `CORS_ORIGINS`. |
+| `FRONTEND_PORT` | Dev server port only, default 5173 (normally the backend serves the web app) |
+| `BACKEND_URL` | Where the dev server forwards `/api`, default `http://127.0.0.1:4100` |
+| `API_URL` | Keep empty: the page then calls `/api` on the address it was opened from, which works on this computer, on phones and on analytics.mrpscan.com alike. Set it only when the API lives on a different site (then add this site to the backend's `CORS_ORIGINS`). |
 
 `npm run build --prefix frontend` writes a static site to `frontend/dist/`.
 
@@ -73,16 +75,16 @@ If the server address is wrong or unreachable, a connect screen lets you change 
 
 ## Deploying on a server with nginx
 
-1. `backend/.env` with `TRUST_LOCALHOST=false`, `HOST=127.0.0.1`; run `npm start --prefix backend` (PM2 or systemd).
-2. `npm run build --prefix frontend`, then point nginx at `frontend/dist` and proxy `/api` to the backend:
+1. `npm run setup`, then create `backend/.env` with `HOST=127.0.0.1`, `TRUST_LOCALHOST=false` and a strong `ANALYTICS_TOKEN`.
+2. Keep `API_URL` empty in `frontend/.env`.
+3. Run `npm start` (the backend, one port 4100) under PM2 or systemd.
+4. Point nginx at that one port:
 
 ```nginx
 server {
     server_name analytics.mrpscan.com;
-    root /path/to/MRPanalytics/frontend/dist;
-    location / { try_files $uri /index.html; }
-    location /api/ {
-        proxy_pass http://127.0.0.1:4000;
+    location / {
+        proxy_pass http://127.0.0.1:4100;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header Host $host;
     }

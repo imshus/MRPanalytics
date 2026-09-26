@@ -4,14 +4,18 @@
     {
       "name": "analytics-backend",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["backend/src/index.js"],
-      "port": 4000
+      "runtimeArgs": [
+        "backend/src/index.js"
+      ],
+      "port": 4100
     },
     {
       "name": "analytics-frontend",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["frontend/server.js"],
-      "port": 4100
+      "runtimeArgs": [
+        "frontend/server.js"
+      ],
+      "port": 5173
     }
   ]
 }

@@ -1,5 +1,6 @@
-// Starts backend and frontend together for local use: `npm start` in the project root.
-// Each can also run alone: `npm start --prefix backend`, `npm start --prefix frontend`.
+// Development mode: backend (one port, 4100) plus the optional frontend dev server (5173).
+// Normal use is just the backend: `npm start` in the project root.
+// Run with `npm run start:dev`.
 const { spawn } = require('child_process');
 const path = require('path');
 
