@@ -1,0 +1,17 @@
+{
+  "name": "mrpscan-analytics",
+  "version": "1.0.0",
+  "description": "User analytics dashboard for the MRPscan MongoDB database",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "mongodb": "^6.21.0"
+  }
+}
