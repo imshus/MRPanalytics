@@ -1,10 +1,12 @@
 # Dependencies
 node_modules/
 
-# Secrets: real settings files (each folder has a .env.example to copy)
+# Secrets: the backend .env holds the database password and access key. Never commit it.
 .env
 backend/.env
-frontend/.env
+# Web and app settings hold no secrets, so they are shared.
+!frontend/.env
+!android/.env
 
 # Build output
 frontend/dist/
