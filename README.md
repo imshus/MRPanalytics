@@ -12,7 +12,9 @@ frontend/   Web app (static HTML/JS/CSS) + its own server, port 4100. Calls the 
 android/    Phone app (WebView shell) that opens the frontend. Holds no secrets.
 ```
 
-The backend never serves web pages, and the frontend never touches the database.
+The frontend never touches the database. For convenience the backend also shows the web app:
+opening the backend's address (e.g. https://analytics.mrpscan.com/) gives the analytics UI at `/`,
+and that UI always reads data from the same server's `/api`. Set `SERVE_FRONTEND=false` for an API-only backend.
 
 ## Quick start (this computer)
 
@@ -87,10 +89,26 @@ If the server address is wrong or unreachable, a connect screen lets you change 
 
 ## Deploying on a server with nginx
 
-1. Backend: `npm run setup`, create `backend/.env` with `HOST=127.0.0.1`, `TRUST_LOCALHOST=false`
-   and a strong `ANALYTICS_TOKEN`, then run `npm run start:backend` under PM2 or systemd.
-2. Frontend: create `frontend/.env` with `API_URL` empty, then `npm run build:frontend`.
-3. nginx serves the frontend files and passes `/api` to the backend:
+Simplest (one process): the backend serves the UI and the API.
+
+1. `git pull`, `npm run setup`, then create `backend/.env` with a strong `ANALYTICS_TOKEN` FIRST,
+   then `MONGO_URI`, `HOST=127.0.0.1`, `TRUST_LOCALHOST=false`.
+2. Run `npm run start:backend` under PM2 or systemd (restart it after every `git pull`).
+3. nginx passes everything to it:
+
+```nginx
+server {
+    server_name analytics.mrpscan.com;
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+Alternative (static frontend): set `SERVE_FRONTEND=false`, run `npm run build:frontend` with
+`API_URL` empty, and let nginx serve the files and pass `/api` to the backend:
 
 ```nginx
 server {

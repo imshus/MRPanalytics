@@ -1,8 +1,9 @@
-// MRPanalytics backend: read-only JSON API over the MRPscan MongoDB database.
-// Runs on its own port and serves data only. The web app is a separate project
-// (../frontend) that calls this API through its own server or directly via CORS.
+// MRPanalytics backend: read-only JSON API over the MRPscan MongoDB database at /api.
+// Opening the server address shows the web app directly: the backend builds the separate
+// frontend project (../frontend) on start and serves it at / (SERVE_FRONTEND=false = API only).
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const { getDb } = require('./db');
@@ -12,8 +13,14 @@ const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const HOST = process.env.HOST || '0.0.0.0';
 const ACCESS_KEY = (process.env.ANALYTICS_TOKEN || '').trim();
-const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '')
+// Web app addresses allowed to call this API from the browser. Used as-is when CORS_ORIGINS
+// is set in .env; otherwise these defaults (the live site and a local frontend) apply.
+const DEFAULT_CORS = 'https://analytics.mrpscan.com,http://analytics.mrpscan.com,http://localhost:4100,http://127.0.0.1:4100,http://localhost:4000,http://127.0.0.1:4000';
+const CORS_ORIGINS = String(process.env.CORS_ORIGINS ?? DEFAULT_CORS)
   .split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
+const SERVE_FRONTEND = String(process.env.SERVE_FRONTEND || 'true').trim().toLowerCase() !== 'false';
+const FRONTEND_ROOT = path.resolve(__dirname, '..', '..', 'frontend');
+const FRONTEND_DIST = path.join(FRONTEND_ROOT, 'dist');
 const TRUST_LOCALHOST = String(process.env.TRUST_LOCALHOST || 'false').trim().toLowerCase() === 'true';
 const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
@@ -69,13 +76,38 @@ const wrap = (fn) => async (req, res) => {
   }
 };
 
-app.get('/', (req, res) => res.json({ service: 'mrpanalytics-backend', ok: true, api: '/api' }));
 app.get('/api/health', (req, res) => res.json({ ok: true, authRequired: Boolean(ACCESS_KEY) && !isLocal(req) }));
 app.use('/api', requireKey);
 app.get('/api/overview', wrap((db, req) => analytics.overview(db, Number(req.query.days) || 30)));
 app.get('/api/users', wrap((db, req) => analytics.listUsers(db, String(req.query.q || ''))));
 app.get('/api/users/:id', wrap((db, req) => analytics.userDetail(db, req.params.id, Number(req.query.days) || 30)));
-app.use((req, res) => res.status(404).json({ error: 'Not found' }));
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+
+// ---- Web app at / ----
+let uiReady = false;
+let uiAppName = 'MRPanalytics';
+if (SERVE_FRONTEND) {
+  try {
+    // Rebuild frontend/dist from frontend/src + frontend/.env so changes apply on every restart.
+    const built = require(path.join(FRONTEND_ROOT, 'scripts', 'build.js')).build();
+    if (built && built.appName) uiAppName = built.appName;
+  } catch (err) {
+    console.error('[web app] build failed:', err.message);
+  }
+  uiReady = fs.existsSync(path.join(FRONTEND_DIST, 'index.html'));
+}
+if (uiReady) {
+  // The app served here always uses THIS server's /api (the default API), whatever
+  // frontend/.env API_URL says; API_URL only matters when the frontend is hosted elsewhere.
+  app.get('/config.js', (req, res) => res.set('Cache-Control', 'no-store').type('js')
+    .send(`window.MRP_CONFIG = ${JSON.stringify({ appName: uiAppName, apiUrl: '' })};\n`));
+  app.use(express.static(FRONTEND_DIST, { etag: false, maxAge: 0 }));
+  app.get('*', (req, res) => res.set('Cache-Control', 'no-store').sendFile(path.join(FRONTEND_DIST, 'index.html')));
+} else {
+  app.use((req, res) => res.status(404).type('text').send(
+    SERVE_FRONTEND ? 'Web app not available: the frontend folder is missing next to backend.' : 'Not found',
+  ));
+}
 
 function lanUrls() {
   const out = [];
@@ -86,7 +118,9 @@ function lanUrls() {
 }
 
 app.listen(PORT, HOST, () => {
-  console.log(`MRPanalytics backend (API only) on http://localhost:${PORT}/api`);
+  console.log(uiReady
+    ? `MRPanalytics on http://localhost:${PORT}  (web app at /, API at /api)`
+    : `MRPanalytics backend (API only) on http://localhost:${PORT}/api`);
   if (HOST === '0.0.0.0') { const lan = lanUrls(); if (lan.length) console.log(`Network address: ${lan.join('  ')}`); }
   console.log(ACCESS_KEY ? `Access key required (ANALYTICS_TOKEN)${TRUST_LOCALHOST ? ', except from this computer (TRUST_LOCALHOST=true)' : ' for every request'}.` : 'WARNING: ANALYTICS_TOKEN is empty, the API is open to anyone who can reach it.');
   console.log(CORS_ORIGINS.length ? `Browsers may call it directly from: ${CORS_ORIGINS.join(', ')}` : 'No CORS origins: browsers reach it only through the frontend server.');
