@@ -7,7 +7,7 @@
       "runtimeArgs": [
         "backend/src/index.js"
       ],
-      "port": 4100
+      "port": 4000
     },
     {
       "name": "analytics-frontend",
@@ -15,7 +15,7 @@
       "runtimeArgs": [
         "frontend/server.js"
       ],
-      "port": 5173
+      "port": 4100
     }
   ]
 }

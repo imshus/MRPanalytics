@@ -1,8 +1,8 @@
-// MRPanalytics frontend DEV server (no dependencies). Optional: the backend already serves
-// the built web app on its own port. Use this only to work on the frontend separately.
-// Builds dist/, serves it, and forwards /api/* to the backend (BACKEND_URL) so browsers
-// and the phone app use one address. In production nginx can do the same job:
-// serve frontend/dist and proxy /api to the backend.
+// MRPanalytics frontend server (no dependencies), separate from the backend project.
+// Builds dist/, serves it on FRONTEND_PORT, and forwards /api/* to the backend
+// (BACKEND_URL) so browsers and the phone app can use one address. If API_URL is set,
+// the browser calls the backend directly instead (backend CORS_ORIGINS must allow it).
+// In production nginx can do the same job: serve frontend/dist and proxy /api.
 const http = require('http');
 const https = require('https');
 const fs = require('fs');

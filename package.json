@@ -1,13 +1,14 @@
 {
   "name": "mrpanalytics",
   "version": "1.0.0",
-  "description": "MRPanalytics: MRPscan user analytics. backend/ (API + serves the web app on one port) + frontend/ (web app) + android/ (phone app)",
+  "description": "MRPanalytics: MRPscan user analytics. Separate backend/ (API, port 4000), frontend/ (web app, port 4100) and android/ (phone app)",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
     "setup": "npm install --prefix backend",
-    "start": "npm start --prefix backend",
-    "start:dev": "node scripts/start-all.js",
+    "start": "node scripts/start-all.js",
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm start --prefix frontend",
     "build:frontend": "npm run build --prefix frontend"
   }
 }

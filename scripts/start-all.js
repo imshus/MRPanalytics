@@ -1,6 +1,6 @@
-// Development mode: backend (one port, 4100) plus the optional frontend dev server (5173).
-// Normal use is just the backend: `npm start` in the project root.
-// Run with `npm run start:dev`.
+// Starts the two separate projects together on this computer: `npm start` in the project root.
+// backend (API, port 4000) and frontend (web app, port 4100). Each also runs alone:
+// `npm run start:backend`, `npm run start:frontend`.
 const { spawn } = require('child_process');
 const path = require('path');
 
