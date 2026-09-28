@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#2A78D6</color>
-    <color name="page_light">#F9F9F7</color>
-    <color name="surface_light">#FCFCFB</color>
-    <color name="page_dark">#0D0D0D</color>
-    <color name="surface_dark">#1A1A19</color>
+    <!-- MRPscan mockup palette: cream background, red brand -->
+    <color name="ic_launcher_background">#D9291F</color>
+    <color name="page_light">#FBF7F0</color>
+    <color name="surface_light">#FBF7F0</color>
+    <color name="page_dark">#FBF7F0</color>
+    <color name="surface_dark">#FBF7F0</color>
 </resources>
