@@ -26,14 +26,14 @@
 <body>
   <div class="card">
     <div class="mark">M</div>
-    <h1>Connect to analytics server</h1>
-    <p>This app shows live data from the MRPscan analytics server. Enter the address of the computer running it.</p>
+    <h1>Data server</h1>
+    <p>The app shows its screens itself and loads MRPscan data from this server.</p>
     <div class="error" id="error"></div>
     <label for="url">Server address</label>
-    <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://192.168.1.10:4100" />
+    <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://analytics.mrpscan.com" />
     <button id="go">Connect</button>
     <button id="reset" class="link">Use default address</button>
-    <div class="hint">On the computer, run <b>npm start</b> in the analytics folder. The phone and computer must be on the same Wi-Fi, or use a hosted https address.</div>
+    <div class="hint">Use the address of the MRPanalytics backend, for example <b>https://analytics.mrpscan.com</b>. The server needs its database settings for data to appear.</div>
   </div>
   <script>
     const params = new URLSearchParams(location.search);

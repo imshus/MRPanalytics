@@ -34,6 +34,26 @@ def appName = setting('APP_NAME', 'MRPanalytics')
 def serverPort = setting('SERVER_PORT', '4100')
 def defaultServer = setting('SERVER_URL', "http://${lanAddress()}:${serverPort}")
 
+// The analytics UI is bundled into the APK: frontend/src is copied to assets/ui with the app
+// name filled in, and config.js makes the UI call /api, which the app forwards to SERVER_URL.
+def uiAssetsDir = layout.buildDirectory.dir('generated/uiAssets')
+def escHtml = { String s -> s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;') }
+def bundleWebUi = tasks.register('bundleWebUi', Copy) {
+    def src = rootProject.file('../frontend/src')
+    inputs.property('appName', appName)
+    from(src) { include '*.html', '*.js', '*.css' }
+    into(uiAssetsDir.map { it.dir('ui') })
+    filter { String line -> line.replace('{{APP_NAME}}', escHtml(appName)).replace('{{APP_INITIAL}}', escHtml(appName.substring(0, 1).toUpperCase())) }
+    doFirst {
+        if (!new File(src, 'index.html').exists()) throw new GradleException("frontend/src/index.html not found next to android/: the UI cannot be bundled")
+    }
+    doLast {
+        def cfg = [appName: appName, apiUrl: '']
+        new File(uiAssetsDir.get().dir('ui').asFile, 'config.js').setText("window.MRP_CONFIG = ${groovy.json.JsonOutput.toJson(cfg)};\n", 'UTF-8')
+    }
+}
+tasks.named('preBuild') { dependsOn bundleWebUi }
+
 def keystoreProps = new Properties()
 def keystoreFile = rootProject.file('keystore.properties')
 if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
@@ -46,10 +66,12 @@ android {
         applicationId 'com.itsolution.prathamanalytics'
         minSdk 24
         targetSdk 35
-        versionCode 7
-        versionName '1.6.0'
+        versionCode 8
+        versionName '1.7.0'
         buildConfigField 'String', 'DEFAULT_SERVER_URL', '"' + defaultServer + '"'
         resValue 'string', 'app_name', appName
+        // Test copies: `gradlew assembleRelease -PtestSuffix=.test` installs next to the real app.
+        if (project.hasProperty('testSuffix')) applicationIdSuffix project.property('testSuffix')
     }
 
     signingConfigs {
@@ -78,6 +100,12 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs += [uiAssetsDir.get().asFile]
+        }
     }
 
     lint {
