@@ -14,10 +14,14 @@
 <body>
   <div id="app" class="app">
     <header class="topbar">
-      <a class="brand" href="#/">
-        <span class="brand-mark">{{APP_INITIAL}}</span>
-        <span class="brand-text"><span class="brand-title">{{APP_NAME}}</span><span class="brand-sub">MRPscan user activity</span></span>
-      </a>
+      <div class="lead">
+        <a class="back-btn" href="#/" aria-label="Back to all users"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></a>
+        <a class="brand" href="#/">
+          <span class="brand-mark">{{APP_INITIAL}}</span>
+          <span class="brand-text"><span class="brand-title">{{APP_NAME}}</span><span class="brand-sub">MRPscan user activity</span></span>
+        </a>
+        <span class="top-title">User details</span>
+      </div>
       <form class="search" id="searchForm" role="search" autocomplete="off">
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input id="searchInput" type="search" placeholder="Search by phone number or name" aria-label="Search users by phone number or name" />
@@ -25,6 +29,7 @@
       <button type="button" id="serverBtn" class="icon-btn hidden" aria-label="Change server">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
       </button>
+      <nav class="cats" id="cats" aria-label="User categories"></nav>
     </header>
 
     <main id="view" class="view" aria-live="polite"></main>
