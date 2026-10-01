@@ -66,8 +66,8 @@ android {
         applicationId 'com.itsolution.prathamanalytics'
         minSdk 24
         targetSdk 35
-        versionCode 9
-        versionName '1.8.0'
+        versionCode 11
+        versionName '1.10.0'
         buildConfigField 'String', 'DEFAULT_SERVER_URL', '"' + defaultServer + '"'
         resValue 'string', 'app_name', appName
         // Test copies: `gradlew assembleRelease -PtestSuffix=.test` installs next to the real app.
