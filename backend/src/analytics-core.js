@@ -141,7 +141,7 @@
         id: str(u._id), phone: u.phone, fullName: u.fullName || '', handle: u.userId || '',
         displayName: u.fullName || u.userId || u.businessName || u.phone,
         businessId: str(u.businessId), businessName: u.businessName || business?.tradeName || business?.legalName || '',
-        businessType: business?.businessType || '', stateName: business?.stateName || '', gstNumber: u.gstNumber || business?.gstNumber || '',
+        businessType: business?.businessType || '', stateName: business?.stateName || '', city: business?.city || '', gstNumber: u.gstNumber || business?.gstNumber || '',
         role: u.role, isActive: u.isActive, phoneVerified: u.phoneVerified, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null,
         license: licenseSummary(s.license, s.wallet),
         stats: {

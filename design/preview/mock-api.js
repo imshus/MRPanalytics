@@ -23,6 +23,7 @@ const PEOPLE = [
   ['Harpreet Kaur', 'Kaur Gold Palace', 'Punjab', 'FREE_TRIAL_LICENSE'],
 ];
 
+const CITIES = ['Jaipur', 'Lucknow', 'New Delhi', 'Surat', 'Pune', 'Indore', 'Hyderabad', 'Ludhiana'];
 const users = PEOPLE.map(([name, biz, state, lic], i) => {
   const id = '64f0a1b2c3d4e5f6a7b8c9' + String(i).padStart(2, '0');
   const handle = name.split(' ')[0].toLowerCase() + int(10, 99);
@@ -31,7 +32,7 @@ const users = PEOPLE.map(([name, biz, state, lic], i) => {
   return {
     id, displayName: name, fullName: name, handle, phone, phoneVerified: i !== 4,
     role: 'OWNER', isActive: i !== 6, businessName: biz, gstNumber: biz ? `0${int(1, 9)}ABCDE${int(1000, 9999)}F1Z${int(1, 9)}` : '',
-    stateName: state, businessType: biz ? pick(['Retailer', 'Wholesaler', 'Manufacturer']) : '',
+    stateName: state, city: CITIES[i], businessType: biz ? pick(['Retailer', 'Wholesaler', 'Manufacturer']) : '',
     createdAt: ago(int(20, 300)), lastLoginAt: ago(int(0, 12)),
     license: { status: lic, daysLeft: lic === 'FREE_TRIAL_LICENSE' ? int(-2, 14) : null },
     stats: { scans, creditBalance: +(rnd() * 400).toFixed(2), invoices: int(0, 120), paymentsSuccessAmount: pick([0, 1180, 5900, 23600, 118000]), wishlists: int(0, 40), employees: int(0, 6), lastScanAt: scans ? ago(int(0, 20)) : null },
@@ -58,7 +59,7 @@ function detail(u, days) {
   ].sort((a, b) => b.at.localeCompare(a.at));
   return {
     user: { ...u, userId: u.handle, stats: undefined, license: undefined },
-    business: u.businessName ? { businessName: u.businessName, stateName: u.stateName, pincode: String(int(110001, 799999)), gstNumber: u.gstNumber } : null,
+    business: u.businessName ? { businessName: u.businessName, stateName: u.stateName, city: u.city, pincode: String(int(110001, 799999)), gstNumber: u.gstNumber } : null,
     license: { ...u.license, raw: { status: u.license.status, createdAt: u.createdAt } },
     wallet: { balance: u.stats.creditBalance }, referral: { code: 'MRP' + int(1000, 9999) }, siblings: [],
     kpis: {

@@ -124,6 +124,7 @@
   // a choice made from the card menu always wins until it is reset to automatic.
   const DEFAULT_CATS = [['fav', 'Favorite'], ['all', 'All'], ['purchased', 'Purchased'], ['trial', 'Free trial'], ['inactive', 'Inactive']];
   const PREBUILT = DEFAULT_CATS.map(([id]) => id);
+  const KEEP_CATS = ['fav', 'all']; // renamable, never deletable
   const AUTO_HINT = {
     purchased: 'Users with a permanent (paid) license are added here automatically.',
     trial: 'Users on a free trial are added here automatically.',
@@ -142,17 +143,24 @@
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(CAT_STORE) || '{}') || {}; } catch { /* storage unavailable */ }
     const byId = new Map((Array.isArray(saved.cats) ? saved.cats : []).filter((c) => c && c.id && c.name).map((c) => [c.id, c]));
-    const cats = DEFAULT_CATS.map(([id, name]) => ({ id, name: (byId.get(id) || {}).name || name }));
+    const removed = (Array.isArray(saved.removed) ? saved.removed : []).filter((id) => PREBUILT.includes(id) && !KEEP_CATS.includes(id));
+    const cats = DEFAULT_CATS.filter(([id]) => !removed.includes(id)).map(([id, name]) => ({ id, name: (byId.get(id) || {}).name || name }));
     for (const c of byId.values()) if (!PREBUILT.includes(c.id)) cats.push({ id: String(c.id), name: String(c.name) });
     const ids = new Set(cats.map((c) => c.id));
     const assign = {};
     for (const [uid, cid] of Object.entries(saved.assign || {})) if (ids.has(cid)) assign[uid] = cid;
-    return { cats, assign };
+    return { cats, assign, removed };
   };
   const catState = loadCats();
   const saveCats = () => { try { localStorage.setItem(CAT_STORE, JSON.stringify(catState)); } catch { /* storage unavailable */ } };
   const catById = (id) => catState.cats.find((c) => c.id === id) || catState.cats[1];
-  const catOf = (u) => catState.assign[u.id] || autoCat(u);
+  const catOf = (u) => { const id = catState.assign[u.id] || autoCat(u); return catState.cats.some((c) => c.id === id) ? id : 'all'; };
+  // Put the prebuilt categories back in their usual order (after one was deleted or restored); custom ones follow.
+  const rebuildCats = () => {
+    const byId = new Map(catState.cats.map((c) => [c.id, c]));
+    const custom = catState.cats.filter((c) => !PREBUILT.includes(c.id));
+    catState.cats = [...DEFAULT_CATS.filter(([id]) => !catState.removed.includes(id)).map(([id, name]) => byId.get(id) || { id, name }), ...custom];
+  };
   let activeCat = 'all'; // the list always opens on All
   let usersData = null; let usersQuery = '';
 
@@ -188,15 +196,22 @@
 
   // Bottom sheet to add a category, or rename / delete one.
   function openCatSheet(id) {
-    const cat = id ? catById(id) : null; const removable = cat && !PREBUILT.includes(cat.id);
+    const cat = id ? catById(id) : null; const removable = cat && !KEEP_CATS.includes(cat.id);
+    const gone = cat ? [] : DEFAULT_CATS.filter(([cid]) => catState.removed.includes(cid));
     const wrap = document.createElement('div'); wrap.className = 'sheet-backdrop';
     wrap.innerHTML = `<form class="sheet" role="dialog" aria-modal="true" aria-label="${cat ? 'Rename category' : 'New category'}">
       <h2>${cat ? 'Rename category' : 'New category'}</h2>
       <input class="field" name="name" maxlength="${MAX_CAT_NAME}" autocomplete="off" placeholder="e.g. Follow up" aria-label="Category name" value="${esc(cat ? cat.name : '')}" />
       ${cat && AUTO_HINT[cat.id] ? `<p class="hint">${esc(AUTO_HINT[cat.id])}</p>` : ''}
+      ${cat && !removable ? '<p class="hint">You can rename this one, but it always stays.</p>' : ''}
+      ${gone.length ? `<div class="restore"><span>Bring back</span>${gone.map(([cid, name]) => `<button type="button" class="chip-btn" data-restore="${esc(cid)}">${esc(name)}</button>`).join('')}</div>` : ''}
       <div class="field-err" role="alert"></div>
       <button class="primary-btn" type="submit">${cat ? 'Save' : 'Add category'}</button>
       <div class="sheet-row"><button type="button" class="ghost-btn" data-close>Cancel</button>${removable ? '<button type="button" class="danger-btn" data-del>Delete category</button>' : ''}</div></form>`;
+    wrap.querySelectorAll('[data-restore]').forEach((b) => b.addEventListener('click', () => {
+      catState.removed = catState.removed.filter((x) => x !== b.dataset.restore); rebuildCats();
+      saveCats(); close(); renderCats(); if (usersData) drawUsers(); toast(`${b.textContent} is back`);
+    }));
     const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (e) => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', onKey);
@@ -217,6 +232,7 @@
     if (del) del.addEventListener('click', () => {
       if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = 'Tap again to delete'; return; }
       catState.cats = catState.cats.filter((c) => c.id !== cat.id);
+      if (PREBUILT.includes(cat.id)) catState.removed.push(cat.id);
       for (const uid of Object.keys(catState.assign)) if (catState.assign[uid] === cat.id) delete catState.assign[uid];
       if (activeCat === cat.id) activeCat = 'all';
       saveCats(); close(); renderCats(); if (usersData) drawUsers(); toast('Category deleted');
@@ -295,44 +311,64 @@
       <div class="page-head"><div><h1>${q ? 'Search results' : inAll ? 'Users' : esc(cat.name)}</h1><div class="sub">${sub}</div></div></div>
       ${n ? `<div class="user-list">${list.map(userCard).join('')}</div>` : emptyMsg(empty)}`;
   }
+  const IC_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
+  // When the person was last around: the later of their last scan and last login.
+  const lastSeenOf = (u) => {
+    const t = [u.stats && u.stats.lastScanAt, u.lastLoginAt].filter(Boolean).map((x) => new Date(x).getTime());
+    return t.length ? new Date(Math.max(...t)) : null;
+  };
+  // Home card = company, person, mobile, last seen, city, state. Everything else is inside (tap the card).
   function userCard(u) {
-    const s = u.stats; const cid = catOf(u); const cat = catById(cid);
-    const stat = (value, label) => `<div><b>${value}</b><span>${esc(label)}</span></div>`;
-    const sub = [esc(u.phone) + (u.phoneVerified ? ' <span class="verified">✓</span>' : ''), u.businessName ? esc(u.businessName) : ''].filter(Boolean).join(' · ');
-    return `<article class="uc" data-id="${esc(u.id)}" tabindex="0" role="link" aria-label="Open ${esc(u.displayName)}">
-      <div class="uc-head"><div class="avatar sm" style="background:${avatarColor(u.id)}">${esc(initials(u.displayName))}</div>
-        <div class="uc-id"><div class="uc-name">${esc(u.displayName)}</div><div class="uc-sub">${sub}</div></div>
-        <button type="button" class="cat-pick${cid === 'fav' ? ' fav' : ''}" data-id="${esc(u.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Category: ${esc(cat.name)}. Change category for ${esc(u.displayName)}">${cid === 'fav' ? IC_STAR : IC_TAG}<span>${esc(cat.name)}</span>${IC_CHEV}</button></div>
-      <div class="uc-chips">${licenseChip(u.license)}${u.isActive ? '' : '<span class="chip critical"><span class="dot"></span>Inactive</span>'}</div>
-      <div class="uc-stats">${stat(fmtNum(s.scans), 'Scans')}${stat(s.creditBalance == null ? '—' : fmtCompact(s.creditBalance), 'Credits')}${stat(fmtNum(s.invoices), 'Invoices')}${stat(fmtINRc(s.paymentsSuccessAmount), 'Paid')}</div></article>`;
+    const cid = catOf(u); const cat = catById(cid);
+    const company = u.businessName || ''; const person = u.fullName || '';
+    const title = company || person || u.displayName || u.phone;
+    const who = company && person && person !== company ? person : '';
+    const place = [u.city, u.stateName].filter(Boolean).map(esc).join(', ');
+    return `<article class="uc" data-id="${esc(u.id)}" tabindex="0" role="link" aria-label="Open ${esc(title)}">
+      <div class="uc-head"><div class="avatar sm" style="background:${avatarColor(u.id)}">${esc(initials(title))}</div>
+        <div class="uc-id"><div class="uc-name">${esc(title)}</div>${who ? `<div class="uc-person">${esc(who)}</div>` : ''}</div>
+        <button type="button" class="cat-pick${cid === 'fav' ? ' fav' : ''}" data-id="${esc(u.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Category: ${esc(cat.name)}. Change category for ${esc(title)}">${cid === 'fav' ? IC_STAR : IC_TAG}<span>${esc(cat.name)}</span>${IC_CHEV}</button></div>
+      <div class="uc-meta"><span class="uc-phone">${esc(u.phone)}${u.phoneVerified ? ' <i class="verified">✓</i>' : ''}</span><span class="uc-seen">Last seen ${esc(relTime(lastSeenOf(u)))}</span></div>
+      ${place ? `<div class="uc-place">${IC_PIN}<span>${place}</span></div>` : ''}</article>`;
   }
 
   // ---------- USER DETAIL ----------
-  let detailTab = 'timeline'; let detailDays = 30;
+  let detailTab = 'overview'; let detailDays = 30;
   const fold = (title, body, count = '', cls = '') => `<details class="fold${cls ? ' ' + cls : ''}"><summary><span>${esc(title)}</span>${count !== '' ? `<span class="count">${esc(count)}</span>` : ''}</summary><div class="fold-body">${body}</div></details>`;
   const sec = (title, body, sub = '') => `<div class="sec"><div class="sec-head"><h3>${esc(title)}</h3>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</div>${body}</div>`;
-  const info = (label, value) => `<div><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+  const info = (label, value, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
 
   async function renderUser(id) {
     setNav('users'); document.body.classList.add('is-detail'); loading();
     let d; try { d = await api(`/api/users/${encodeURIComponent(id)}?days=${detailDays}`); } catch (e) { return errorBox(e); }
     const u = d.user, k = d.kpis, a = d.activity;
-    const tabs = [['timeline', 'Timeline'], ['scans', 'Scans'], ['payments', 'Payments'], ['invoices', 'Invoices'], ['wishlist', 'Wishlist'], ['team', 'Team'], ['more', 'More']];
+    const tabs = [['overview', 'Overview'], ['timeline', 'Timeline'], ['scans', 'Scans'], ['payments', 'Payments'], ['invoices', 'Invoices'], ['wishlist', 'Wishlist'], ['team', 'Team'], ['more', 'More']];
     const chip = (tone, text) => `<span class="chip ${tone}"><span class="dot"></span>${text}</span>`;
-    const state = d.business && d.business.stateName ? esc(d.business.stateName) + (d.business.pincode ? ' ' + esc(d.business.pincode) : '') : '';
+    const biz = d.business || {};
+    const company = u.businessName || ''; const person = u.fullName || u.displayName || '';
+    const title = company || person || u.phone;
+    const place = [biz.city || u.city, biz.stateName || u.stateName].filter(Boolean).map(esc).join(', ') + (biz.pincode ? ` · ${esc(biz.pincode)}` : '');
     view.innerHTML = `
       <section class="card pc">
-        <div class="pc-top"><div class="avatar" style="background:${avatarColor(u.id)}">${esc(initials(u.displayName))}</div>
-          <div class="pc-id"><h1>${esc(u.displayName)}</h1><div class="pc-chips">${licenseChip(d.license)}${u.isActive ? chip('good', 'Active') : chip('critical', 'Inactive')}${u.phoneVerified ? '' : chip('warning', 'Phone unverified')}</div></div></div>
+        <div class="pc-top"><div class="avatar" style="background:${avatarColor(u.id)}">${esc(initials(title))}</div>
+          <div class="pc-id"><h1>${esc(title)}</h1>${company && person && person !== company ? `<p class="pc-person">${esc(person)}</p>` : ''}
+            <div class="pc-chips">${licenseChip(d.license)}${u.isActive ? chip('good', 'Active') : chip('critical', 'Inactive')}${u.phoneVerified ? '' : chip('warning', 'Phone unverified')}</div></div></div>
         <dl class="pc-info">
-          ${info('Phone', `<span class="mono">${esc(u.phone)}</span>`)}
-          ${u.userId ? info('Login ID', '@' + esc(u.userId)) : ''}
-          ${u.businessName ? info('Business', esc(u.businessName)) : ''}
-          ${u.gstNumber ? info('GST', `<span class="mono">${esc(u.gstNumber)}</span>`) : ''}
-          ${state ? info('State', state) : ''}
-          ${info('Joined', esc(fmtDate(u.createdAt)))}
+          ${info('Mobile', `<span class="mono">${esc(u.phone)}</span>`)}
           ${info('Last seen', esc(relTime(k.lastSeenAt)))}
+          ${place ? info('Location', place, 'wide') : ''}
         </dl>
+        <details class="pc-more">
+          <summary>More details</summary>
+          <dl class="pc-info inner">
+            ${u.gstNumber ? info('GST', `<span class="mono">${esc(u.gstNumber)}</span>`, 'wide') : ''}
+            ${u.userId ? info('Login ID', '@' + esc(u.userId)) : ''}
+            ${biz.businessType ? info('Business type', esc(biz.businessType)) : ''}
+            ${info('Role', esc(u.role || '—'))}
+            ${info('Joined', esc(fmtDate(u.createdAt)))}
+            ${k.referralCode ? info('Referral code', `<span class="mono">${esc(k.referralCode)}</span>`) : ''}
+          </dl>
+        </details>
       </section>
 
       <div class="tiles summary">
@@ -342,35 +378,10 @@
         ${tile('Invoices', fmtNum(k.invoices), `${fmtINRc(k.invoiceTotal)} billed`)}
       </div>
 
-      ${card('Scans per day', '<div class="chart-box" id="uScans"></div>', '', `<span class="range" id="udRange">${[7, 30, 90].map((n) => `<button type="button" data-days="${n}" class="${n === detailDays ? 'active' : ''}">${n}d</button>`).join('')}</span>`)}
-
-      ${fold('More numbers and charts', `
-        <div class="tiles compact-tiles">
-          ${tile('Active scan days', fmtNum(k.activeDays), k.firstScanAt ? `first scan ${fmtDate(k.firstScanAt)}` : 'no scans yet', true)}
-          ${tile('Avg credits per scan', fmtCredits(k.avgScanCharge), `${fmtCredits(k.creditsAdded)} added in total`, true)}
-          ${tile('Tokens processed', fmtCompact(k.tokens), `$${fmtDec(k.scanCostUsd)} model cost`, true)}
-          ${tile('Wishlist', fmtNum(k.wishlists), `${fmtINRc(k.wishlistValue)} total MRP`, true)}
-          ${tile('Payments failed', fmtNum(k.paymentsFailed), `${fmtNum(k.paymentsPending)} pending`, true)}
-          ${tile('e-Invoices', fmtNum(k.eInvoiced), `${fmtNum(k.invoicePdfFailed)} PDF failed`, true)}
-          ${tile('OTP logins', fmtNum(k.otpVerified), `${fmtNum(k.otpSent)} sent · ${fmtNum(k.otpFailed)} failed`, true)}
-          ${tile('Employees', fmtNum(k.employees), `${fmtNum(k.activeEmployees)} active`, true)}
-        </div>
-        <div class="stack charts">
-          ${card('Credit balance over time', '<div class="chart-box" id="uBalance"></div>', 'after every credit change')}
-          ${card('Scans by hour of day', '<div class="chart-box" id="uHours"></div>', 'IST · all time')}
-          ${card('Scans by weekday', '<div class="chart-box" id="uWeekday"></div>', 'all time')}
-        </div>`)}
-
       <div class="tabs" id="udTabs" role="tablist">${tabs.map(([key, label]) => `<button type="button" role="tab" data-tab="${key}" class="${key === detailTab ? 'active' : ''}">${esc(label)}</button>`).join('')}</div>
       <div id="udTabBody"></div>`;
 
-    view.querySelectorAll('#udRange button').forEach((b) => b.addEventListener('click', () => { detailDays = Number(b.dataset.days); renderUser(id); }));
     view.querySelectorAll('#udTabs button').forEach((b) => b.addEventListener('click', () => { detailTab = b.dataset.tab; view.querySelectorAll('#udTabs button').forEach((x) => x.classList.toggle('active', x === b)); renderTab(d); }));
-
-    Charts.columnChart(document.getElementById('uScans'), { points: d.series.scansByDay.map((p) => ({ label: dayLabel(p.day), title: fmtDate(p.day), value: p.value })), format: (v) => `${fmtNum(v)} scans`, height: 190 });
-    Charts.lineChart(document.getElementById('uBalance'), { points: d.series.balanceHistory.map((b) => ({ x: b.at, y: b.balance, title: fmtDTFull(b.at), sub: `${humanize(b.type)} ${fmtCredits(b.amount)}` })), format: fmtCredits, step: true, color: 'var(--series-2)', timeLabel: shortDate, height: 190 });
-    Charts.columnChart(document.getElementById('uHours'), { points: d.series.hourHist.map((h) => ({ label: String(h.hour).padStart(2, '0'), title: `${String(h.hour).padStart(2, '0')}:00 – ${String(h.hour).padStart(2, '0')}:59`, value: h.value })), format: (v) => `${fmtNum(v)} scans`, color: 'var(--series-3)', labelEvery: 3, height: 170 });
-    Charts.columnChart(document.getElementById('uWeekday'), { points: d.series.weekdayHist.map((w) => ({ label: w.day, value: w.value })), format: (v) => `${fmtNum(v)} scans`, color: 'var(--series-7)', height: 170 });
     renderTab(d);
   }
 
@@ -443,6 +454,30 @@
   function renderTab(d) {
     const el = document.getElementById('udTabBody'); const a = d.activity; const k = d.kpis;
     switch (detailTab) {
+      case 'overview': {
+        el.innerHTML = `<div class="stack">
+          ${card('Scans per day', '<div class="chart-box" id="uScans"></div>', '', `<span class="range" id="udRange">${[7, 30, 90].map((n) => `<button type="button" data-days="${n}" class="${n === detailDays ? 'active' : ''}">${n}d</button>`).join('')}</span>`)}
+          <div class="tiles compact-tiles">
+            ${tile('Active scan days', fmtNum(k.activeDays), k.firstScanAt ? `first scan ${fmtDate(k.firstScanAt)}` : 'no scans yet', true)}
+            ${tile('Avg credits per scan', fmtCredits(k.avgScanCharge), `${fmtCredits(k.creditsAdded)} added in total`, true)}
+            ${tile('Tokens processed', fmtCompact(k.tokens), `$${fmtDec(k.scanCostUsd)} model cost`, true)}
+            ${tile('Wishlist', fmtNum(k.wishlists), `${fmtINRc(k.wishlistValue)} total MRP`, true)}
+            ${tile('Payments failed', fmtNum(k.paymentsFailed), `${fmtNum(k.paymentsPending)} pending`, true)}
+            ${tile('e-Invoices', fmtNum(k.eInvoiced), `${fmtNum(k.invoicePdfFailed)} PDF failed`, true)}
+            ${tile('OTP logins', fmtNum(k.otpVerified), `${fmtNum(k.otpSent)} sent · ${fmtNum(k.otpFailed)} failed`, true)}
+            ${tile('Employees', fmtNum(k.employees), `${fmtNum(k.activeEmployees)} active`, true)}
+          </div>
+          ${card('Credit balance over time', '<div class="chart-box" id="uBalance"></div>', 'after every credit change')}
+          ${card('Scans by hour of day', '<div class="chart-box" id="uHours"></div>', 'IST · all time')}
+          ${card('Scans by weekday', '<div class="chart-box" id="uWeekday"></div>', 'all time')}
+        </div>`;
+        el.querySelectorAll('#udRange button').forEach((b) => b.addEventListener('click', () => { detailDays = Number(b.dataset.days); renderUser(d.user.id); }));
+        Charts.columnChart(document.getElementById('uScans'), { points: d.series.scansByDay.map((p) => ({ label: dayLabel(p.day), title: fmtDate(p.day), value: p.value })), format: (v) => `${fmtNum(v)} scans`, height: 190 });
+        Charts.lineChart(document.getElementById('uBalance'), { points: d.series.balanceHistory.map((b) => ({ x: b.at, y: b.balance, title: fmtDTFull(b.at), sub: `${humanize(b.type)} ${fmtCredits(b.amount)}` })), format: fmtCredits, step: true, color: 'var(--series-2)', timeLabel: shortDate, height: 190 });
+        Charts.columnChart(document.getElementById('uHours'), { points: d.series.hourHist.map((h) => ({ label: String(h.hour).padStart(2, '0'), title: `${String(h.hour).padStart(2, '0')}:00 – ${String(h.hour).padStart(2, '0')}:59`, value: h.value })), format: (v) => `${fmtNum(v)} scans`, color: 'var(--series-3)', labelEvery: 3, height: 170 });
+        Charts.columnChart(document.getElementById('uWeekday'), { points: d.series.weekdayHist.map((w) => ({ label: w.day, value: w.value })), format: (v) => `${fmtNum(v)} scans`, color: 'var(--series-7)', height: 170 });
+        break;
+      }
       case 'timeline': {
         const list = d.timeline.slice(0, 100);
         el.innerHTML = card('Recent activity', timelineList(list), d.timeline.length > list.length ? `latest ${list.length} of ${d.timeline.length}` : `${list.length} events`);
