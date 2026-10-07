@@ -13,6 +13,12 @@
   const TZ = 'Asia/Kolkata';
   const DAY_MS = 86400000;
   const OID_RX = /^[a-f0-9]{24}$/i;
+  // Shop accounts in business_users. An employee's sign-in record (role EMP)
+  // lives there too and carries a copy of its shop's GSTIN, name and address,
+  // but it is the same shop, never a user, signup or GST registration of its
+  // own: the counts, the user list, Top Users and "Account created" read only
+  // these. (A shop's own page still lists its employees among its team.)
+  const SHOP_ACCOUNTS = { role: { $ne: 'EMP' } };
 
   const oid = (v) => ({ $oid: String(v) });
   const date = (d) => ({ $date: new Date(d).toISOString() });
@@ -174,7 +180,7 @@
         db.count('scan_billing', { createdAt: { $gte: date(`${monthKey}-01T00:00:00+05:30`) } }),
       ]);
       const [users, businesses, licenses, wallets, scanAgg, creditAgg, paymentAgg, invoiceAgg, wishlistCount, employeeCount, otpAgg, scansByDay, signupsByDay, creditsUsedByDay, invoicesByDay, stats] = await Promise.all([
-        db.find('business_users', {}, { projection: { passwordHash: 0, mpinHash: 0, mpinVault: 0 } }),
+        db.find('business_users', SHOP_ACCOUNTS, { projection: { passwordHash: 0, mpinHash: 0, mpinVault: 0 } }),
         db.find('businesses', {}, { projection: { _id: 1, tradeName: 1, legalName: 1, businessType: 1, stateName: 1, address: 1, isRegistered: 1, createdAt: 1 } }),
         db.aggregate('organization_licenses', [{ $group: { _id: '$licenseStatus', count: { $sum: 1 } } }]),
         db.aggregate('organization_wallets', [{ $group: { _id: null, balance: { $sum: '$creditBalance' } } }]),
@@ -186,7 +192,7 @@
         db.count('employees', {}),
         db.aggregate('otp_verifications', [{ $group: { _id: '$status', count: { $sum: 1 } } }]),
         byDay('scan_billing', {}, days),
-        byDay('business_users', {}, days),
+        byDay('business_users', SHOP_ACCOUNTS, days),
         byDay('credit_transactions', { type: 'SCAN_DEDUCTION' }, days, { $sum: '$amount' }),
         byDay('invoices', {}, days),
         businessStats(null),
@@ -237,7 +243,7 @@
         db.find('scan_billing', {}, o),
         db.find('payment_transactions', {}, o),
         db.find('invoices', {}, { ...o, projection: { businessId: 1, invoiceNumber: 1, customerName: 1, grandTotal: 1, createdAt: 1 } }),
-        db.find('business_users', {}, { ...o, projection: { businessId: 1, createdAt: 1 } }),
+        db.find('business_users', SHOP_ACCOUNTS, { ...o, projection: { businessId: 1, createdAt: 1 } }),
         db.find('wishlists', {}, { ...o, projection: { businessId: 1, title: 1, totalMrp: 1, createdAt: 1 } }),
       ]);
       const events = [];
@@ -252,13 +258,13 @@
     // ------------------------------------------------------------ users list / search
     async function listUsers(q = '') {
       const query = String(q || '').trim();
-      let filter = {};
+      let filter = SHOP_ACCOUNTS;
       if (query) {
         const r = rx(escapeRx(query));
         const bizIds = (await db.find('businesses', { $or: [{ tradeName: r }, { legalName: r }, { gstNumber: r }] }, { projection: { _id: 1 } })).map((b) => oid(b._id));
         const or = [{ phone: r }, { fullName: r }, { userId: r }, { businessName: r }, { gstNumber: r }, { businessId: { $in: bizIds } }];
         if (OID_RX.test(query)) or.push({ _id: oid(query) }, { businessId: oid(query) });
-        filter = { $or: or };
+        filter = { ...SHOP_ACCOUNTS, $or: or };
       }
       const users = await db.find('business_users', filter, { sort: { createdAt: -1 } });
       const businessIds = users.map((u) => str(u.businessId)).filter(Boolean);
