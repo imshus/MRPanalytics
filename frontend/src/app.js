@@ -31,6 +31,10 @@
   const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
   const avatarColor = (seed) => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `var(--series-${(h % 8) + 1})`; };
   const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^\w/, (c) => c.toUpperCase());
+  // "City, State" only, never the pincode (city comes from the backend; older servers send none).
+  const placeOf = (city, state) => [city, state].filter(Boolean).filter((v, i, all) => all.indexOf(v) === i).join(', ');
+  const seenAt = (u) => [u.lastLoginAt, u.stats && u.stats.lastScanAt].filter(Boolean).map((t) => new Date(t).getTime()).sort((a, b) => b - a)[0] || null;
+  const IC_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 
   const LICENSE_TONE = { FREE_TRIAL_LICENSE: 'warning', NO_LICENSE: 'critical', PERMANENT_LICENSE: 'good', ACTIVE: 'good', EXPIRED: 'critical', UNKNOWN: '' };
   const licenseChip = (lic) => { const st = lic?.status || 'UNKNOWN'; const tone = LICENSE_TONE[st] ?? (st.includes('PERMANENT') || st.includes('ACTIVE') ? 'good' : ''); const extra = st === 'FREE_TRIAL_LICENSE' && lic.daysLeft != null ? ` · ${lic.daysLeft > 0 ? lic.daysLeft + ' d left' : 'expired'}` : ''; return `<span class="chip ${tone}"><span class="dot"></span>${esc(humanize(st))}${extra}</span>`; };
@@ -295,16 +299,20 @@
       <div class="page-head"><div><h1>${q ? 'Search results' : inAll ? 'Users' : esc(cat.name)}</h1><div class="sub">${sub}</div></div></div>
       ${n ? `<div class="user-list">${list.map(userCard).join('')}</div>` : emptyMsg(empty)}`;
   }
+  // Home card: business as the title, owner below, category menu, phone + last seen, then "City, State".
   function userCard(u) {
-    const s = u.stats; const cid = catOf(u); const cat = catById(cid);
-    const stat = (value, label) => `<div><b>${value}</b><span>${esc(label)}</span></div>`;
-    const sub = [esc(u.phone) + (u.phoneVerified ? ' <span class="verified">✓</span>' : ''), u.businessName ? esc(u.businessName) : ''].filter(Boolean).join(' · ');
-    return `<article class="uc" data-id="${esc(u.id)}" tabindex="0" role="link" aria-label="Open ${esc(u.displayName)}">
-      <div class="uc-head"><div class="avatar sm" style="background:${avatarColor(u.id)}">${esc(initials(u.displayName))}</div>
-        <div class="uc-id"><div class="uc-name">${esc(u.displayName)}</div><div class="uc-sub">${sub}</div></div>
-        <button type="button" class="cat-pick${cid === 'fav' ? ' fav' : ''}" data-id="${esc(u.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Category: ${esc(cat.name)}. Change category for ${esc(u.displayName)}">${cid === 'fav' ? IC_STAR : IC_TAG}<span>${esc(cat.name)}</span>${IC_CHEV}</button></div>
-      <div class="uc-chips">${licenseChip(u.license)}${u.isActive ? '' : '<span class="chip critical"><span class="dot"></span>Inactive</span>'}</div>
-      <div class="uc-stats">${stat(fmtNum(s.scans), 'Scans')}${stat(s.creditBalance == null ? '—' : fmtCompact(s.creditBalance), 'Credits')}${stat(fmtNum(s.invoices), 'Invoices')}${stat(fmtINRc(s.paymentsSuccessAmount), 'Paid')}</div></article>`;
+    const cid = catOf(u); const cat = catById(cid);
+    const title = u.businessName || u.displayName;
+    const role = humanize(String(u.role || '').toLowerCase());
+    const person = u.businessName ? (u.fullName || (u.handle ? '@' + u.handle : '') || role) : (u.fullName && u.handle ? '@' + u.handle : role);
+    const seen = seenAt(u);
+    const place = placeOf(u.city, u.stateName);
+    return `<article class="uc" data-id="${esc(u.id)}" tabindex="0" role="link" aria-label="Open ${esc(title)}">
+      <div class="uc-head"><div class="avatar sm" style="background:${avatarColor(u.id)}">${esc(initials(title))}</div>
+        <div class="uc-id"><div class="uc-name">${esc(title)}</div>${person ? `<div class="uc-sub">${esc(person)}</div>` : ''}</div>
+        <button type="button" class="cat-pick${cid === 'fav' ? ' fav' : ''}" data-id="${esc(u.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Category: ${esc(cat.name)}. Change category for ${esc(title)}">${cid === 'fav' ? IC_STAR : IC_TAG}<span>${esc(cat.name)}</span>${IC_CHEV}</button></div>
+      <div class="uc-line"><span class="uc-phone">${esc(u.phone)}${u.phoneVerified ? ' <span class="verified" aria-label="verified">✓</span>' : ''}</span><span class="uc-seen">${seen ? 'Last seen ' + esc(relTime(seen)) : 'Not seen yet'}</span></div>
+      ${place ? `<div class="uc-loc">${IC_PIN}<span>${esc(place)}</span></div>` : ''}</article>`;
   }
 
   // ---------- USER DETAIL ----------
@@ -319,7 +327,7 @@
     const u = d.user, k = d.kpis, a = d.activity;
     const tabs = [['timeline', 'Timeline'], ['scans', 'Scans'], ['payments', 'Payments'], ['invoices', 'Invoices'], ['wishlist', 'Wishlist'], ['team', 'Team'], ['more', 'More']];
     const chip = (tone, text) => `<span class="chip ${tone}"><span class="dot"></span>${text}</span>`;
-    const state = d.business && d.business.stateName ? esc(d.business.stateName) + (d.business.pincode ? ' ' + esc(d.business.pincode) : '') : '';
+    const place = d.business ? esc(placeOf(d.business.city, d.business.stateName)) : '';
     view.innerHTML = `
       <section class="card pc">
         <div class="pc-top"><div class="avatar" style="background:${avatarColor(u.id)}">${esc(initials(u.displayName))}</div>
@@ -329,7 +337,7 @@
           ${u.userId ? info('Login ID', '@' + esc(u.userId)) : ''}
           ${u.businessName ? info('Business', esc(u.businessName)) : ''}
           ${u.gstNumber ? info('GST', `<span class="mono">${esc(u.gstNumber)}</span>`) : ''}
-          ${state ? info('State', state) : ''}
+          ${place ? info('Location', place) : ''}
           ${info('Joined', esc(fmtDate(u.createdAt)))}
           ${info('Last seen', esc(relTime(k.lastSeenAt)))}
         </dl>

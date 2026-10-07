@@ -74,6 +74,18 @@
   const countBy = (arr, keyFn, keyName) => Object.entries(arr.reduce((m, x) => { const k = keyFn(x) || 'Unknown'; m[k] = (m[k] || 0) + 1; return m; }, {}))
     .map(([k, count]) => ({ [keyName]: k, count })).sort((a, b) => b.count - a.count);
 
+  // City from the GST-registered address, which ends "…, <city/district>, <state>, <pincode>".
+  // Shown with the state as "City, State" (never the pincode). Blank when the state does not match.
+  function cityFromAddress(address, stateName) {
+    const parts = String(address || '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length && /^\d{6}$/.test(parts[parts.length - 1])) parts.pop();
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!stateName || !parts.length || norm(parts[parts.length - 1]) !== norm(stateName)) return '';
+    parts.pop();
+    const city = parts.length ? parts[parts.length - 1] : '';
+    return /\d/.test(city) || city.length > 40 ? '' : city;
+  }
+
   const EMPTY_STATS = () => ({
     scans: 0, scanCharge: 0, lastScanAt: null, firstScanAt: null, creditsAdded: 0, creditsUsed: 0, creditTx: 0,
     paymentsSuccess: 0, paymentsSuccessAmount: 0, paymentsFailed: 0, paymentsPending: 0,
@@ -141,7 +153,8 @@
         id: str(u._id), phone: u.phone, fullName: u.fullName || '', handle: u.userId || '',
         displayName: u.fullName || u.userId || u.businessName || u.phone,
         businessId: str(u.businessId), businessName: u.businessName || business?.tradeName || business?.legalName || '',
-        businessType: business?.businessType || '', stateName: business?.stateName || '', gstNumber: u.gstNumber || business?.gstNumber || '',
+        businessType: business?.businessType || '', stateName: business?.stateName || '', city: cityFromAddress(business?.address, business?.stateName),
+        gstNumber: u.gstNumber || business?.gstNumber || '',
         role: u.role, isActive: u.isActive, phoneVerified: u.phoneVerified, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null,
         license: licenseSummary(s.license, s.wallet),
         stats: {
@@ -162,7 +175,7 @@
       ]);
       const [users, businesses, licenses, wallets, scanAgg, creditAgg, paymentAgg, invoiceAgg, wishlistCount, employeeCount, otpAgg, scansByDay, signupsByDay, creditsUsedByDay, invoicesByDay, stats] = await Promise.all([
         db.find('business_users', {}, { projection: { passwordHash: 0, mpinHash: 0, mpinVault: 0 } }),
-        db.find('businesses', {}, { projection: { _id: 1, tradeName: 1, legalName: 1, businessType: 1, stateName: 1, isRegistered: 1, createdAt: 1 } }),
+        db.find('businesses', {}, { projection: { _id: 1, tradeName: 1, legalName: 1, businessType: 1, stateName: 1, address: 1, isRegistered: 1, createdAt: 1 } }),
         db.aggregate('organization_licenses', [{ $group: { _id: '$licenseStatus', count: { $sum: 1 } } }]),
         db.aggregate('organization_wallets', [{ $group: { _id: null, balance: { $sum: '$creditBalance' } } }]),
         db.aggregate('scan_billing', [{ $group: { _id: null, count: { $sum: 1 }, charge: { $sum: '$totalScanCharge' }, usd: { $sum: '$totalUsd' }, tokens: { $sum: { $add: ['$promptTokens', '$completionTokens'] } }, first: { $min: '$createdAt' }, last: { $max: '$createdAt' } } }]),
@@ -351,7 +364,8 @@
       return sanitize({
         generatedAt: new Date(), days,
         user: { ...user, id: userIdStr, displayName: user.fullName || user.userId || user.businessName || user.phone },
-        business, license: { ...licenseSummary(license, wallet), raw: license }, wallet, referral, siblings,
+        business: business ? { ...business, city: cityFromAddress(business.address, business.stateName) } : business,
+        license: { ...licenseSummary(license, wallet), raw: license }, wallet, referral, siblings,
         kpis, creditsByType, models, wishlistCategories, invoiceItems,
         series: { scansByDay, creditsUsedByDay, tokensByDay, invoicesByDay, balanceHistory, hourHist, weekdayHist },
         activity: { scans, credits, payments, licenseTx, invoices, wishlists, otps, webhooks, employees },
