@@ -4,9 +4,13 @@ Simpler UX for the MRPanalytics web app and the Android app (the APK bundles `fr
 so one UI serves both). The redesigned UI itself lives in `frontend/src`; this folder holds
 the notes, screenshots and a no-database preview.
 
-![Home with category dropdown](screenshots/home-dropdown.jpg)
-![User detail](screenshots/detail-top.jpg)
-![Tables become cards on phones](screenshots/detail-scans-cards.jpg)
+| Home | Card dropdown |
+|---|---|
+| ![Home](images/1-home.jpg) | ![Card dropdown](images/2-card-dropdown.jpg) |
+
+| Edit or delete a category | User detail |
+|---|---|
+| ![Category edit and delete](images/3-category-edit-delete.jpg) | ![User detail](images/4-user-detail.jpg) |
 
 ## What changed
 
