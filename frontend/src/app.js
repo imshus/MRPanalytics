@@ -33,6 +33,16 @@
   const humanize = (s) => String(s || '').replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^\w/, (c) => c.toUpperCase());
   // "City, State" only, never the pincode (city comes from the backend; older servers send none).
   const placeOf = (city, state) => [city, state].filter(Boolean).filter((v, i, all) => all.indexOf(v) === i).join(', ');
+  // City from the GST address "…, city, state, pincode" (same rule as the backend), for servers that don't send `city` yet.
+  const cityFromAddress = (address, state) => {
+    const parts = String(address || '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length && /^\d{6}$/.test(parts[parts.length - 1])) parts.pop();
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!state || !parts.length || norm(parts[parts.length - 1]) !== norm(state)) return '';
+    parts.pop();
+    const city = parts.length ? parts[parts.length - 1] : '';
+    return /\d/.test(city) || city.length > 40 ? '' : city;
+  };
 
   const LICENSE_TONE = { FREE_TRIAL_LICENSE: 'warning', NO_LICENSE: 'critical', PERMANENT_LICENSE: 'good', ACTIVE: 'good', EXPIRED: 'critical', UNKNOWN: '' };
   const licenseChip = (lic) => { const st = lic?.status || 'UNKNOWN'; const tone = LICENSE_TONE[st] ?? (st.includes('PERMANENT') || st.includes('ACTIVE') ? 'good' : ''); const extra = st === 'FREE_TRIAL_LICENSE' && lic.daysLeft != null ? ` · ${lic.daysLeft > 0 ? lic.daysLeft + ' d left' : 'expired'}` : ''; return `<span class="chip ${tone}"><span class="dot"></span>${esc(humanize(st))}${extra}</span>`; };
@@ -321,7 +331,7 @@
     const u = d.user, k = d.kpis, a = d.activity;
     const tabs = [['timeline', 'Timeline'], ['scans', 'Scans'], ['payments', 'Payments'], ['invoices', 'Invoices'], ['wishlist', 'Wishlist'], ['team', 'Team'], ['more', 'More']];
     const chip = (tone, text) => `<span class="chip ${tone}"><span class="dot"></span>${text}</span>`;
-    const place = d.business ? esc(placeOf(d.business.city, d.business.stateName)) : '';
+    const place = d.business ? esc(placeOf(d.business.city || cityFromAddress(d.business.address, d.business.stateName), d.business.stateName)) : '';
     view.innerHTML = `
       <section class="card pc">
         <div class="pc-top"><div class="avatar" style="background:${avatarColor(u.id)}">${esc(initials(u.displayName))}</div>
