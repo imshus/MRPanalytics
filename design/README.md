@@ -4,16 +4,21 @@ Simpler UX for the MRPanalytics web app and the Android app (the APK bundles `fr
 so one UI serves both). The redesigned UI itself lives in `frontend/src`; this folder holds
 the notes, screenshots and a no-database preview.
 
-![Home with category dropdown](screenshots/home-dropdown.jpg)
-![User detail](screenshots/detail-top.jpg)
-![Tables become cards on phones](screenshots/detail-scans-cards.jpg)
+| Home | Card dropdown |
+|---|---|
+| ![Home](images/1-home.jpg) | ![Card dropdown](images/2-card-dropdown.jpg) |
+
+| Edit or delete a category | User detail |
+|---|---|
+| ![Category edit and delete](images/3-category-edit-delete.jpg) | ![User detail](images/4-user-detail.jpg) |
 
 ## What changed
 
 **Home**
-- Compact user cards: name, phone, business, license tag, 4 stats.
+- Compact user cards show only: company, person, mobile, last seen, city and state (plus the category chip). License tag and stats live inside the user (tap the card).
 - Scrollable category capsules under the search bar: **Favorite, All, Purchased, Free trial, Inactive**
-  plus `+ Category` for your own. Every category can be renamed (custom ones can be deleted).
+  plus `+ Category` for your own. Every category can be renamed. All except Favorite and All can be deleted; a deleted
+  Purchased / Free trial / Inactive can be brought back from the `+ Category` sheet.
 - **Purchased / Free trial / Inactive fill themselves** from each user's license tag every time the list
   loads, so a user moves on their own when their status changes:
   - Purchased: permanent (paid) license
@@ -25,9 +30,9 @@ the notes, screenshots and a no-database preview.
 
 **User detail**
 - Top bar with a back button; search and categories hide here.
-- Profile card, 4 summary tiles (Scans, Credits left, Paid, Invoices), one chart (7/30/90 days).
-- Extra numbers and charts are folded into "More numbers and charts".
-- 7 tabs: Timeline, Scans, Payments, Invoices, Wishlist, Team, More
+- Profile card: company, person, license and status, mobile, last seen, location. GST, login ID, business type, role, joined and referral code sit under "More details".
+- 4 summary tiles (Scans, Credits left, Paid, Invoices).
+- 8 tabs in two rows: Overview (scans chart 7/30/90 days, extra numbers, other charts), Timeline, Scans, Payments, Invoices, Wishlist, Team, More
   (More = login history, settings, license payments, gateway events, all stored fields).
 - On phones tables turn into cards (no sideways scrolling); technical columns (ids, tokens,
   GST split) are hidden there and still shown on desktop.
