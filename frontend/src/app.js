@@ -288,13 +288,67 @@
   });
   view.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('uc')) location.hash = '#/user/' + e.target.dataset.id; });
 
+  // ---------- city on the home cards ----------
+  // Newer servers send `city` with every user. Older ones send only the state, so the app fetches each
+  // business's details once (3 at a time), works the city out of its address and remembers it on this
+  // device for 30 days. Nothing is fetched once the server sends `city` itself.
+  const CITY_STORE = 'mrpa-city-v1';
+  const CITY_TTL = 30 * 86400000;
+  let cityCache = {};
+  try { cityCache = JSON.parse(localStorage.getItem(CITY_STORE) || '{}') || {}; } catch { cityCache = {}; }
+  const saveCityCache = () => { try { localStorage.setItem(CITY_STORE, JSON.stringify(cityCache)); } catch { /* storage unavailable */ } };
+  const cityFor = (u) => {
+    if ('city' in u) return u.city || '';
+    const c = cityCache[u.businessId];
+    return c && c.state === u.stateName ? c.city : '';
+  };
+  let cityRun = null;
+  function fillCities(users) {
+    if (cityRun || !users.length || users.some((u) => 'city' in u)) return;
+    const now = Date.now(); const want = new Map();
+    for (const u of users) {
+      if (!u.businessId || !u.stateName || want.has(u.businessId)) continue;
+      const c = cityCache[u.businessId];
+      if (c && c.state === u.stateName && now - c.at < CITY_TTL) continue;
+      want.set(u.businessId, u.id);
+    }
+    if (!want.size) return;
+    const jobs = [...want.entries()];
+    const base = (window.MRP_CONFIG && window.MRP_CONFIG.apiUrl) || '';
+    cityRun = Promise.all([0, 1, 2].map(async () => {
+      while (jobs.length) {
+        const [bid, uid] = jobs.shift();
+        try {
+          const res = await fetch(`${base}/api/users/${encodeURIComponent(uid)}?days=7`, { headers: { 'x-access-key': readKey() } });
+          if (res.status === 401) { jobs.length = 0; break; }
+          if (!res.ok) continue;
+          const b = (await res.json()).business || {};
+          cityCache[bid] = { city: b.city || cityFromAddress(b.address, b.stateName), state: b.stateName || '', at: Date.now() };
+          saveCityCache(); paintCity(bid);
+        } catch { /* offline or slow: try again on the next visit */ }
+      }
+    })).finally(() => { cityRun = null; });
+  }
+  function paintCity(bid) {
+    if (!usersData) return;
+    const byId = new Map(usersData.users.map((x) => [x.id, x]));
+    document.querySelectorAll('.uc').forEach((card) => {
+      const u = byId.get(card.dataset.id);
+      if (!u || u.businessId !== bid) return;
+      const place = placeOf(cityFor(u), u.stateName);
+      let loc = card.querySelector('.uc-loc');
+      if (!loc && place) { card.insertAdjacentHTML('beforeend', `<div class="uc-loc">${IC_PIN}<span></span></div>`); loc = card.querySelector('.uc-loc'); }
+      if (loc) loc.querySelector('span').textContent = place;
+    });
+  }
+
   // ---------- USERS ----------
   async function renderUsers(q = '') {
     setNav('users'); document.body.classList.remove('is-detail'); if (searchInput.value !== q) searchInput.value = q;
     usersQuery = q; renderCats();
     loading(q ? `Searching “${q}”…` : 'Loading users…');
     let d; try { d = await api(`/api/users?q=${encodeURIComponent(q)}`); } catch (e) { return errorBox(e); }
-    usersData = d; renderCats(); drawUsers();
+    usersData = d; renderCats(); drawUsers(); fillCities(d.users);
   }
   function drawUsers() {
     closeMenu();
@@ -316,7 +370,7 @@
     const role = humanize(String(u.role || '').toLowerCase());
     const person = u.businessName ? (u.fullName || (u.handle ? '@' + u.handle : '') || role) : (u.fullName && u.handle ? '@' + u.handle : role);
     const seen = seenAt(u);
-    const place = placeOf(u.city, u.stateName);
+    const place = placeOf(cityFor(u), u.stateName);
     return `<article class="uc" data-id="${esc(u.id)}" tabindex="0" role="link" aria-label="Open ${esc(title)}">
       <div class="uc-head"><div class="avatar sm" style="background:${avatarColor(u.id)}">${esc(initials(title))}</div>
         <div class="uc-id"><div class="uc-name">${esc(title)}</div>${person ? `<div class="uc-sub">${esc(person)}</div>` : ''}</div>
